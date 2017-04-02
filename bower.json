@@ -1,0 +1,14 @@
+{
+  "name": "msa-img",
+  "version": "0.1.0",
+  "homepage": "https://github.com/mysimpleapp/msa-img",
+  "authors": [
+    "Nicolas CARREZ <nicolas.carrez@gmail.com>"
+  ],
+  "description": "MySimpleApp component for images",
+  "main": "msa-img-selector.html",
+  "license": "MIT",
+  "dependencies": {
+    "mysimpleapp": "*"
+  }
+}
