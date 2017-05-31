@@ -1,11 +1,11 @@
-<link rel="import" src="../mysimpleapp/mysimpleapp.pack.html"></link>
+<link rel="import" href="../mysimpleapp/mysimpleapp.html"></link>
 <style>
 msa-img-selector .row {
 	margin: 5px;
 }
 msa-img-selector .preview {
-	width: 500px;
-	height: 500px;
+	width: 300px;
+	height: 300px;
 	padding: 10px;
 	display: table-cell;
 	text-align: center;
@@ -20,146 +20,132 @@ msa-img-selector .preview.dragging {
 	box-shadow: 0pt 0pt 3pt 2pt #aaf;
 }
 msa-img-selector .preview img {
-	max-width: 500px;
-	max-height: 500px;
+	max-width: 300px;
+	max-height: 300px;
 }
 </style>
 <template id="msa-img-selector">
-	<div class="row url">URL: <input type="text" size="50"> <button>OK</button></div>
+	<div class="row url">URL: <input type="text" size="30"> <button>OK</button></div>
 	<div class="row file">Upload: <input type="file" accept="image/*"></div>
 	<div class="row preview" tabindex="0"><b>Paste</b> or <b>Drag</b> image here</div>
-	<div class="row" style="text-align:right"><button class="ok">OK</button> <button class="cancel">Cancel</button></div>
 </template>
 <script>
 (function() {
 
-	// register msa-img-selector ///////////////////////////////////
+// msa-img-selector ///////////////////////////////////
 
-	Msa.registerElement("msa-img-selector", {template:"#msa-img-selector",
-		oncreate: function(){
-			var selector = this
+// methods
+var selectorMethods = {}
 
-			// doms
-			this.urlInput = this.querySelector("div.url input")
-			this.urlInput.onkeypress = function(e) {
-				if (e.keyCode == 13) selector.preselectFromUrl()
-			}
-			this.urlButton = this.querySelector("div.url button")
-			this.urlButton.onclick = function(){
-				selector.preselectFromUrl()
-			}
-			this.fileInput = this.querySelector("div.file input")
-			this.fileInput.onchange = function() {
-				selector.preselectFromFile()
-			}
-			this.previewDiv = this.querySelector("div.preview")
-			this.previewDiv.onpaste = newOnpasteListener(this)
-			this.previewDiv.ondragover = cancelEvent
-			this.previewDiv.ondragenter = newOndragenterListener(this)
-			this.previewDiv.ondragleave = newOndragleaveListener(this)
-			this.previewDiv.ondrop = newOndropListener(this)
-			this.okButton = this.querySelector("button.ok")
-			this.okButton.onclick = function() {
-				selector.select()
-				selector.remove()
-			}
-			this.cancelButton = this.querySelector("button.cancel")
-			this.cancelButton.onclick = function() { selector.remove() }
-
-			// methods
-			this.select = select
-			this.preview = preview
-			this.preselect = preselect
-			this.preselectFromUrl = preselectFromUrl
-			this.preselectFromFile = preselectFromFile
+selectorMethods.preselect = function(selection) {
+	this.selection = selection
+	this.preview(selection)
+}
+selectorMethods.preview = function(selection) {
+	var src = selection.src, file = selection.file
+	if(src) {
+		this.Q("div.preview").innerHTML = ""
+		var img = document.createElement("img")
+		img.src =src
+		this.Q("div.preview").appendChild(img)
+	} else if(file) {
+		var reader = new FileReader()
+		var selector = this
+		reader.onload = function(e){
+			selector.preview({src:e.target.result})
 		}
+		reader.readAsDataURL(file)
+	}
+
+}
+selectorMethods.select = function() {
+	if(this.onSelect) this.onSelect(this.selection)
+}
+
+selectorMethods.preselectFromUrl = function() {
+	this.preselect({src:this.Q("div.url input").value})
+}
+
+selectorMethods.preselectFromFile = function() {
+	var file = this.Q("div.file input").files[0]
+	this.preselect({file:file})
+}
+
+// actions
+var selectorActions = []
+
+selectorActions.push({el:"div.url input", evt:"keypress", act:function(e){
+	if (e.keyCode == 13) this.preselectFromUrl()
+}})
+
+selectorActions.push({el:"div.url button", evt:"click", act:function(){
+	this.preselectFromUrl()
+}})
+
+selectorActions.push({el:"div.file input", evt:"change", act:function(){
+	this.preselectFromFile()
+}})
+
+selectorActions.push({el:"div.preview", evt:"paste", act:function(e){
+	var items = (e.clipboardData || e.originalEvent.clipboardData).items
+	for (var i=0, len=items.length; i<len; ++i) {
+		var item = items[i]
+		if (item.kind === 'file')
+			this.preselect({file:item.getAsFile()})
+	}
+}})
+selectorActions.push({el:"div.preview", evt:"dragover", act:function(e) {
+	e.preventDefault()
+	return false
+}})
+selectorActions.push({el:"div.preview", evt:"dragenter", act:function(e, input){
+	e.preventDefault()
+	input.classList.add("dragging")
+	return false
+}})
+selectorActions.push({el:"div.preview", evt:"dragleave", act:function(e, input) {
+	e.preventDefault()
+	input.classList.remove("dragging")
+	return false
+}})
+selectorActions.push({el:"div.preview", evt:"drop", act:function(e, input){
+	e.preventDefault()
+	var file = e.dataTransfer.files[0]
+	this.preselect({file:file})
+	input.classList.remove("dragging")
+	input.focus()
+	return false
+}})
+
+// register element
+Msa.registerElement("msa-img-selector", {
+	template:"#msa-img-selector",
+	oncreate: function(){
+		this.Q = Msa.Q
+		Object.assign(this, selectorMethods)
+		Msa.addActions(this, selectorActions)
+	}
+})
+
+// popup 
+
+var popupImgSelector = function(onSelect) {
+	var popup = MsaPopup.create("msa-img-selector", {
+		buttons: popupButtons
 	})
+	if(onSelect) popup.onSelect = onSelect
+	return popup
+}
 
-	// generic methods ////////////////////////////////////////
+var popupButtons = [
+	{ text:"OK", act:function(){ this.select() }},
+	{ text:"Cancel", act:"cancel" }
+]
 
-	var preselect = function(selection) {
-		this.selection = selection
-		this.preview(selection)
-	}
-	var preview = function(selection) {
-		var src = selection.src, file = selection.file
-		if(src) {
-			this.previewDiv.innerHTML = ""
-			var img = document.createElement("img")
-			img.src =src
-			this.previewDiv.appendChild(img)
-		} else if(file) {
-			var reader = new FileReader()
-			var selector = this
-			reader.onload = function(e){
-				selector.preview({src:e.target.result})
-			}
-			reader.readAsDataURL(file)
-		}
+// MsaImg //////////////////////////////////
 
-	}
-	var select = function() {
-		if(this.onSelect) {
-			this.onSelect(this.selection)
-		}
-	}
-
-	// url ///////////////////////////////////////////////////
-
-	var preselectFromUrl = function() {
-		this.preselect({src:this.urlInput.value})
-	}
-
-	// file selection ///////////////////////////////////////
-
-	var preselectFromFile = function() {
-		var file = this.fileInput.files[0]
-		this.preselect({file:file})
-	}
-
-	// paste ///////////////////////////////////////////////
-
-	var newOnpasteListener = function(selector) {
-		return function(event){
-			var items = (event.clipboardData || event.originalEvent.clipboardData).items;
-			for (index in items) {
-				var item = items[index]
-				if (item.kind === 'file') {
-					selector.preselect({file:item.getAsFile()})
-				}
-			}
-		}
-	}
-
-	// drag & drop ///////////////////////////////////////////////
-
-	var cancelEvent = function(e) {
-		e.preventDefault()
-		return false
-	}
-	var newOndragenterListener = function(selector) {
-		return function(e) {
-			e.preventDefault()
-			this.classList.add("dragging")
-			return false
-		}
-	}
-	var newOndragleaveListener = function(selector) {
-		return function(e) {
-			e.preventDefault()
-			this.classList.remove("dragging")
-			return false
-		}
-	}
-	var newOndropListener = function(selector) {
-		return function(e) {
-			e.preventDefault()
-			var file = e.dataTransfer.files[0]
-			selector.preselect({file:file})
-			this.classList.remove("dragging")
-			this.focus()
-			return false
-		}
-	}
-})();
+if(!document.MsaImg) document.MsaImg = MsaImg = {}
+MsaImg.popupImgSelector = popupImgSelector
+	
+})()
 </script>
